@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum ShiftType {
+  NORMAL
+  OT
+  HOLIDAY
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model Employee {
+  id                String       @id @default(uuid())
+  employeeCode      String       @unique @map("employee_code")
+  name              String
+  email             String       @unique
+  password          String
+  role              Role         @default(EMPLOYEE)
+  position          String       @default("")
+  department        String       @default("")
+  hourlyRate        Float        @map("hourly_rate") @default(0)
+  otRateMultiplier  Float        @map("ot_rate_multiplier") @default(1.5)
+  holidayRateMultiplier Float    @map("holiday_rate_multiplier") @default(2.0)
+  avatarColor       String       @map("avatar_color") @default("#6366f1")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  shifts            Shift[]
+  attendances       Attendance[]
+  payrolls          Payroll[]
+  auditLogs         AuditLog[]
+
+  @@map("employees")
+}
+
+model Shift {
+  id          String    @id @default(uuid())
+  employeeId  String    @map("employee_id")
+  date        DateTime  @db.Date
+  startTime   String    @map("start_time") // "09:00"
+  endTime     String    @map("end_time")   // "17:00"
+  shiftType   ShiftType @default(NORMAL) @map("shift_type")
+  note        String    @default("")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  attendance  Attendance?
+
+  @@map("shifts")
+}
+
+model Attendance {
+  id          String    @id @default(uuid())
+  employeeId  String    @map("employee_id")
+  shiftId     String    @unique @map("shift_id")
+  checkIn     DateTime? @map("check_in")
+  checkOut    DateTime? @map("check_out")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift       Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@map("attendances")
+}
+
+model Payroll {
+  id            String        @id @default(uuid())
+  employeeId    String        @map("employee_id")
+  month         Int
+  year          Int
+  normalHours   Float         @default(0) @map("normal_hours")
+  otHours       Float         @default(0) @map("ot_hours")
+  holidayHours  Float         @default(0) @map("holiday_hours")
+  normalPay     Float         @default(0) @map("normal_pay")
+  otPay         Float         @default(0) @map("ot_pay")
+  holidayPay    Float         @default(0) @map("holiday_pay")
+  totalPay      Float         @default(0) @map("total_pay")
+  status        PayrollStatus @default(DRAFT)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, month, year])
+  @@map("payrolls")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., "PUNCH_IN", "PUNCH_OUT", "CREATE_SHIFT", "UPDATE_SHIFT", "DELETE_SHIFT"
+  details     String   // text description of what happened
+  employeeId  String?  @map("employee_id") // the employee affected
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  employee    Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
